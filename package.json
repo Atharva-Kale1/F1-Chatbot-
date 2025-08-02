@@ -6,20 +6,31 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
+    "seed": "ts-node ./scripts/loadDb.ts",
     "lint": "next lint"
   },
   "dependencies": {
+    "@ai-sdk/groq": "^2.0.0",
+    "@datastax/astra-db-ts": "^2.0.2",
+    "@huggingface/inference": "^2.8.1",
+    "ai": "^4.0.2",
+    "dotenv": "^17.2.1",
+    "groq-sdk": "^0.29.0",
+    "langchain": "^0.1.36",
+    "next": "15.4.5",
+    "openai": "^5.11.0",
+    "puppeteer": "^19.11.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "next": "15.4.5"
+    "ts-node": "^10.9.2"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@eslint/eslintrc": "^3",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.4.5",
-    "@eslint/eslintrc": "^3"
+    "typescript": "^5"
   }
 }

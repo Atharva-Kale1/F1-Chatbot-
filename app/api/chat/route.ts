@@ -6,6 +6,9 @@ interface ChatMessage {
   content: string;
 }
 
+// Add: message alias for downstream providers
+type ModelMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+
 const {
   ASTRA_DB_NAMESPACE,
   ASTRA_DB_COLLECTION,
@@ -56,8 +59,26 @@ function streamText(controller: ReadableStreamDefaultController, text: string, e
   }
 }
 
+// Add: helper to normalize HF result types without using any
+function extractGeneratedText(result: unknown): string {
+  if (typeof result === 'string') return result;
+  if (Array.isArray(result)) {
+    for (const item of result) {
+      if (item && typeof item === 'object' && 'generated_text' in item) {
+        const text = (item as { generated_text?: string }).generated_text;
+        if (text) return text;
+      }
+    }
+  }
+  if (result && typeof result === 'object' && 'generated_text' in result) {
+    const text = (result as { generated_text?: string }).generated_text;
+    if (text) return text;
+  }
+  return '';
+}
+
 // New: Groq non-streaming generation helper
-async function generateWithGroq(messages: { role: 'system' | 'user' | 'assistant'; content: string }[]): Promise<string> {
+async function generateWithGroq(messages: ModelMessage[]): Promise<string> {
   if (!GROQ_API_KEY) return '';
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -91,7 +112,7 @@ async function generateWithHF(prompt: string): Promise<string> {
   const textGenModels = ['bigscience/bloom-560m', 'gpt2', 'distilgpt2'];
   for (const model of textGenModels) {
     try {
-      const result: any = await hf.textGeneration({
+      const result = await hf.textGeneration({
         model,
         inputs: prompt,
         parameters: {
@@ -100,13 +121,10 @@ async function generateWithHF(prompt: string): Promise<string> {
           return_full_text: false,
         },
       });
-      const text =
-        typeof result === 'string'
-          ? result
-          : (result?.generated_text ?? result?.[0]?.generated_text ?? '');
+      const text = extractGeneratedText(result);
       if (text) return text;
-    } catch (e: any) {
-      const msg = String(e?.message || e);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
       console.warn(`HF textGeneration failed for ${model}:`, msg);
       continue;
     }
@@ -114,7 +132,7 @@ async function generateWithHF(prompt: string): Promise<string> {
   const t5Models = ['google/flan-t5-base', 'google/flan-t5-small'];
   for (const model of t5Models) {
     try {
-      const result: any = await hf.textToText({
+      const result = await hf.textToText({
         model,
         inputs: prompt,
         parameters: {
@@ -122,14 +140,10 @@ async function generateWithHF(prompt: string): Promise<string> {
           max_new_tokens: 256,
         },
       });
-      // textToText returns array of { generated_text }
-      const text =
-        typeof result === 'string'
-          ? result
-          : (result?.generated_text ?? result?.[0]?.generated_text ?? '');
+      const text = extractGeneratedText(result);
       if (text) return text;
-    } catch (e: any) {
-      const msg = String(e?.message || e);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
       console.warn(`HF textToText failed for ${model}:`, msg);
       continue;
     }
@@ -192,7 +206,7 @@ export async function POST(req: Request) {
     `;
 
     // Format messages for downstream provider
-    const groqMessages = [
+    const groqMessages: ModelMessage[] = [
       { role: 'system', content: systemPrompt },
       ...messages.map((msg) => ({
         role: msg.role,
@@ -229,7 +243,7 @@ export async function POST(req: Request) {
           // 1) Try Groq first if key is present
           let text = '';
           if (GROQ_API_KEY) {
-            text = await generateWithGroq(groqMessages as any);
+            text = await generateWithGroq(groqMessages);
           }
 
           // 2) Fallback to HF non-streaming (works even if HF text-generation streaming is 404)

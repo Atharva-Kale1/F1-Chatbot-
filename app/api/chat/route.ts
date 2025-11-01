@@ -107,7 +107,7 @@ async function generateWithGroq(messages: ModelMessage[]): Promise<string> {
   }
 }
 
-// New: HF non-streaming fallbacks (text-generation, then text2text)
+// New: HF non-streaming fallbacks (only text-generation models to avoid missing APIs)
 async function generateWithHF(prompt: string): Promise<string> {
   const textGenModels = ['bigscience/bloom-560m', 'gpt2', 'distilgpt2'];
   for (const model of textGenModels) {
@@ -129,25 +129,7 @@ async function generateWithHF(prompt: string): Promise<string> {
       continue;
     }
   }
-  const t5Models = ['google/flan-t5-base', 'google/flan-t5-small'];
-  for (const model of t5Models) {
-    try {
-      const result = await hf.textToText({
-        model,
-        inputs: prompt,
-        parameters: {
-          temperature: 0.7,
-          max_new_tokens: 256,
-        },
-      });
-      const text = extractGeneratedText(result);
-      if (text) return text;
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.warn(`HF textToText failed for ${model}:`, msg);
-      continue;
-    }
-  }
+  // No text2text fallback since HfInference doesn't expose textToText in your environment
   return '';
 }
 
